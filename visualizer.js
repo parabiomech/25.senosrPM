@@ -525,16 +525,6 @@ class Visualizer {
             this.controls.update();
         }
 
-        // Rotate the glow effect
-        if (this.wheelchair) {
-            const glow = this.wheelchair.children.find(child =>
-                child.material && child.material.transparent
-            );
-            if (glow) {
-                glow.rotation.y += 0.01;
-            }
-        }
-
         this.renderer.render(this.scene, this.camera);
     }
 

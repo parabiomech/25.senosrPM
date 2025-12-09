@@ -417,28 +417,35 @@ class Analyzer {
             });
         }
 
-        // Display metadata if available
-        if (results.metadata) {
-            html += `
-                <div class="metadata-section">
-                    <h3>📱 측정 정보</h3>
-                    <div class="result-item">
-                        <div class="label">기기</div>
-                        <div class="value">${results.metadata.device}</div>
-                    </div>
-                    <div class="result-item">
-                        <div class="label">플랫폼</div>
-                        <div class="value">${results.metadata.platform}</div>
-                    </div>
-                    <div class="result-item">
-                        <div class="label">측정 시간</div>
-                        <div class="value">${results.metadata.recordingTime}</div>
-                    </div>
-                </div>
-            `;
-        }
-
         this.resultsContainer.innerHTML = html;
+
+        // Display metadata in left panel
+        if (results.metadata) {
+            this.displayMetadata(results.metadata);
+        }
+    }
+
+    // ========================================
+    // Display Metadata in Left Panel
+    // ========================================
+    displayMetadata(metadata) {
+        const container = document.getElementById('metadataInfo');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="result-item">
+                <div class="label">기기</div>
+                <div class="value">${metadata.device}</div>
+            </div>
+            <div class="result-item">
+                <div class="label">플랫폼</div>
+                <div class="value">${metadata.platform}</div>
+            </div>
+            <div class="result-item">
+                <div class="label">측정 시간</div>
+                <div class="value">${metadata.recordingTime}</div>
+            </div>
+        `;
     }
 
     // ========================================
