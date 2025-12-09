@@ -22,6 +22,10 @@ class Visualizer {
 
         // Camera view modes
         this.viewMode = 'perspective';
+
+        // Calibration - initial orientation offset
+        this.calibrationQuaternion = null;
+        this.isCalibrated = false;
     }
 
     initialize() {
@@ -433,24 +437,36 @@ class Visualizer {
         // Calculate relative frame within segment
         const relativeFrame = frame - this.segmentStartFrame;
 
-        // Update wheelchair orientation using quaternion
+        // Calibrate on first frame of segment
+        if (!this.isCalibrated && data.qw !== undefined) {
+            this.calibrate(data);
+        }
+
+        // Update wheelchair orientation using quaternion with calibration
         if (data.qw !== undefined && data.qx !== undefined &&
             data.qy !== undefined && data.qz !== undefined) {
 
-            const quaternion = new THREE.Quaternion(
+            let quaternion = new THREE.Quaternion(
                 data.qx,
                 data.qy,
                 data.qz,
                 data.qw
             );
 
+            // Apply calibration offset
+            if (this.calibrationQuaternion) {
+                quaternion = this.calibrationQuaternion.clone().multiply(quaternion);
+            }
+
             this.wheelchair.setRotationFromQuaternion(quaternion);
         } else if (data.roll !== undefined && data.pitch !== undefined && data.yaw !== undefined) {
             // Fallback to Euler angles if quaternion not available
+            // Apply calibration offset
+            const calibOffset = this.calibrationEuler || { roll: 0, pitch: 0, yaw: 0 };
             this.wheelchair.rotation.set(
-                data.roll * Math.PI / 180,
-                data.yaw * Math.PI / 180,
-                data.pitch * Math.PI / 180,
+                (data.roll - calibOffset.roll) * Math.PI / 180,
+                (data.yaw - calibOffset.yaw) * Math.PI / 180,
+                (data.pitch - calibOffset.pitch) * Math.PI / 180,
                 'YXZ'
             );
         }
@@ -553,5 +569,36 @@ class Visualizer {
             this.scene.remove(this.pathLine);
             this.pathLine = null;
         }
+
+        // Reset calibration for new segment
+        this.isCalibrated = false;
+        this.calibrationQuaternion = null;
+        this.calibrationEuler = null;
+    }
+
+    // Calibrate initial orientation to zero
+    calibrate(initialData) {
+        if (initialData.qw !== undefined) {
+            // Store inverse of initial quaternion
+            const initialQuat = new THREE.Quaternion(
+                initialData.qx,
+                initialData.qy,
+                initialData.qz,
+                initialData.qw
+            );
+            this.calibrationQuaternion = initialQuat.clone().invert();
+        }
+        
+        if (initialData.roll !== undefined) {
+            // Store initial Euler angles for offset
+            this.calibrationEuler = {
+                roll: initialData.roll,
+                pitch: initialData.pitch,
+                yaw: initialData.yaw
+            };
+        }
+
+        this.isCalibrated = true;
+        console.log('Calibration applied - Initial orientation set to zero');
     }
 }
