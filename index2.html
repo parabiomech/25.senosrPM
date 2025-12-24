@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>♿ Wheelchair Mobility Analyzer</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- External Libraries via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<style>
+    /* Mobile Optimization for index2.html */
+    @media (max-width: 768px) {
+
+        /* Layout Adjustments: Stack vertically */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding-bottom: 40px;
+        }
+
+        /* 1. Control Panel (Data Upload) */
+        .control-panel {
+            order: 1;
+            max-height: none;
+            /* Allow full expansion */
+            height: auto;
+            padding: 20px;
+        }
+
+        /* Increase Upload Area size ("Data load canvas" interpretation A) */
+        .upload-label {
+            padding: 50px 20px;
+            /* Thicker/Taller */
+            min-height: 180px;
+        }
+
+        /* 2. Visualization Panel (3D Canvas) - "Data load canvas" interpretation B */
+        .visualization-panel {
+            order: 2;
+            min-height: 50vh;
+            /* Takes up half screen */
+            height: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .canvas-container {
+            height: 50vh !important;
+            /* Force canvas height */
+            min-height: 400px;
+        }
+
+        /* 3. Sensor Data Graph - "Expanding downwards" fix */
+        .sensor-chart-panel {
+            order: 3;
+            height: 400px !important;
+            /* Fixed height preventing infinite expansion */
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-container {
+            flex: 1;
+            height: 100% !important;
+            min-height: 0;
+            /* Align with flex parent */
+            position: relative;
+        }
+
+        /* Ensure canvas fills container but respects parent height */
+        #dataChart {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* 4. Performance Panel */
+        .performance-panel {
+            order: 4;
+        }
+    }
+</style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>♿ Wheelchair Mobility Analyzer</h1>
+            <p class="subtitle">SensorLogger 데이터 분석 및 3D 시각화</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel: Control -->
+            <aside class="control-panel">
+                <div class="panel-section">
+                    <h2>📁 데이터 업로드</h2>
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="csvFileInput" accept=".csv,.zip" multiple>
+                        <label for="csvFileInput" class="upload-label">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span>CSV 파일 선택 또는 드래그</span>
+                        </label>
+                    </div>
+                    <div id="fileInfo" class="file-info"></div>
+                </div>
+
+                <div class="panel-section">
+                    <h2>🧪 테스트 모드</h2>
+                    <div class="test-mode-selector">
+                        <button class="mode-btn active" data-mode="straight">
+                            <span class="icon">➡️</span>
+                            <span>직진 푸시</span>
+                        </button>
+                        <button class="mode-btn" data-mode="turn">
+                            <span class="icon">🔄</span>
+                            <span>회전</span>
+                        </button>
+                        <button class="mode-btn" data-mode="wheelie">
+                            <span class="icon">⚖️</span>
+                            <span>휠리</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h2>⚙️ 재생 컨트롤</h2>
+                    <div class="playback-controls">
+                        <button id="playBtn" class="control-btn" disabled>
+                            <span>▶️ 재생</span>
+                        </button>
+                        <button id="pauseBtn" class="control-btn" disabled>
+                            <span>⏸️ 일시정지</span>
+                        </button>
+                        <button id="resetBtn" class="control-btn" disabled>
+                            <span>🔄 리셋</span>
+                        </button>
+                    </div>
+                    <div class="speed-control">
+                        <label for="speedSlider">재생 속도: <span id="speedValue">1.0</span>x</label>
+                        <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
+                    </div>
+                    <div class="progress-bar">
+                        <input type="range" id="progressBar" min="0" max="100" value="0" disabled>
+                        <div class="time-display">
+                            <span id="currentTime">0:00</span> / <span id="totalTime">0:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h2>📱 측정 정보</h2>
+                    <div id="metadataInfo" class="metadata-info">
+                        <p class="placeholder">데이터를 업로드하면 표시됩니다</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center Panel: 3D Visualization -->
+            <section class="visualization-panel">
+                <div class="panel-header">
+                    <h2>🎬 3D 시각화</h2>
+                    <div class="view-controls">
+                        <button class="icon-btn" title="수평면 (위에서)">🔽</button>
+                        <button class="icon-btn" title="측면 (옆에서)">➡️</button>
+                        <button class="icon-btn" title="정면 (앞에서)">⬆️</button>
+                        <button class="icon-btn" title="시점 리셋">🔄</button>
+                    </div>
+                </div>
+                <div id="threejsCanvas" class="canvas-container"></div>
+                <div class="canvas-overlay">
+                    <div id="orientationInfo" class="info-display"></div>
+                </div>
+            </section>
+
+            <!-- Bottom Panel: Charts -->
+            <section class="chart-panel sensor-chart-panel">
+                <div class="panel-header">
+                    <h2>📈 센서 데이터 그래프</h2>
+                    <div class="chart-tabs">
+                        <button class="tab-btn active" data-chart="acceleration">가속도</button>
+                        <button class="tab-btn" data-chart="gyroscope">각속도</button>
+                        <button class="tab-btn" data-chart="orientation">오리엔테이션</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="dataChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Analysis Results Panel (중간) -->
+            <section class="chart-panel analysis-panel">
+                <div class="panel-header">
+                    <h2>📊 분석 결과</h2>
+                </div>
+                <div id="analysisResults" class="analysis-results analysis-content">
+                    <p class="placeholder">데이터를 업로드하고 분석을 시작하세요</p>
+                </div>
+            </section>
+
+            <!-- Performance Panel -->
+            <section class="chart-panel performance-panel">
+                <div class="panel-header">
+                    <h2>🎯 종합 퍼포먼스</h2>
+                </div>
+                <div class="performance-content">
+                    <div class="performance-details">
+                        <p class="placeholder">데이터를 업로드하면 분석 결과가 표시됩니다</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p>데이터 처리 중...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="analyzer.js"></script>
+    <script src="visualizer.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
